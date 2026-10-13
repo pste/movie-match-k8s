@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Due cartelle NON sono qui dentro, e per due motivi diversi:
+#
+#   k8s/secrets/  e' cifrato con SOPS, e ArgoCD non sa decifrarlo
+#   k8s/manual/   ha dei segnaposto ${...}, e ArgoCD non esegue envsubst
+#
+# Entrambe si applicano a mano. Tutto il resto e' GitOps.
+resources:
+- namespace.yaml
+- postgres.yaml
+- services.yaml
+- api.yaml
+- ui.yaml
+
+# I tag reali si scrivono qui a ogni rilascio (vedi README).
+images:
+- name: pirraste/movie-match-api
+  newTag: v0.1.0
+- name: pirraste/movie-match-ui
+  newTag: v0.1.0

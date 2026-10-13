@@ -1,0 +1,8 @@
+# chiave age privata: decifra i secret, non va mai committata
+private/
+# lock di decrypt.sh: esiste solo mentre i secret sono in chiaro
+decrypted
+.env
+.vscode/
+.idea/
+.DS_Store

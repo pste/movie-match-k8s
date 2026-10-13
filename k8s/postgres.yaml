@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: movie-match-postgres-volume
+  labels:
+    app: movie-match
+    component: postgres
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    # Directory dedicata: condividerla con un altro Postgres significherebbe
+    # due processi sulla stessa PGDATA, che e' corruzione garantita.
+    path: /var/mnt/hdd-data-1/movie-match-postgres
+    # Su Talos non c'e' SSH per creare la directory a mano.
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: movie-match-postgres-claim
+  namespace: movie-match
+  labels:
+    app: movie-match
+    component: postgres
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: movie-match-postgres-volume
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: movie-match
+  labels:
+    app: movie-match
+    component: postgres
+spec:
+  replicas: 1
+  strategy:
+    # Il PV e' ReadWriteMany ma PGDATA non lo e': con RollingUpdate il pod
+    # nuovo monterebbe la stessa directory del vecchio prima che questo esca.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: movie-match
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: movie-match
+        component: postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      initContainers:
+        # Gira come root prima che postgres parta. Il hostPath appartiene a
+        # root e postgres (uid 999) non puo' scriverci. Su Talos non c'e' SSH
+        # per fare il chown sul nodo, quindi lo fa un initContainer.
+        - name: fix-permissions
+          image: busybox:1.36.1
+          command: ['sh', '-c', 'chown -R 999:999 /var/lib/postgresql/data']
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgresdata
+      containers:
+        - name: postgres
+          # Stessa versione dello sviluppo (movie-match-db/run-postgres.sh).
+          image: 'postgres:17.6'
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 5432
+          env:
+            - name: TZ
+              value: "Europe/Rome"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGDATABASE
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGUSER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGPASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'postgres']
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgresdata
+      volumes:
+        - name: postgresdata
+          persistentVolumeClaim:
+            claimName: movie-match-postgres-claim

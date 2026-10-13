@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: movie-match
+  labels:
+    app: movie-match
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: movie-match
+      component: api
+  template:
+    metadata:
+      labels:
+        app: movie-match
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: pirraste/movie-match-api:v0
+          env:
+            - name: TZ
+              value: "Europe/Rome"
+            - name: PGHOST
+              value: "postgres.movie-match.svc.cluster.local"
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGDATABASE
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGUSER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: movie-match-pgcreds
+                  key: PGPASSWORD
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 192Mi
+          # /api/health non tocca il database: un Postgres lento non e' un
+          # motivo per riavviare l'API.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000

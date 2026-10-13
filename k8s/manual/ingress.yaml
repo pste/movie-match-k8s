@@ -1,0 +1,40 @@
+# ${MOVIEMATCH_HOST} viene sostituito da ./apply-manual.sh leggendo .env.
+# Questo file non e' applicabile cosi' com'e', ed e' voluto: l'hostname non
+# entra nel repo.
+#
+# I Service (ui-svc, api-svc) stanno in k8s/services.yaml, sotto ArgoCD.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: movie-match-ingress
+  namespace: movie-match
+  labels:
+    app: movie-match
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - ${MOVIEMATCH_HOST}
+      secretName: movie-match-tls
+  rules:
+    - host: ${MOVIEMATCH_HOST}
+      http:
+        paths:
+          # /api prima di /: con pathType Prefix Traefik ordina per lunghezza
+          # del percorso, ma tenerli in quest'ordine rende evidente l'intento.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-svc
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui-svc
+                port:
+                  number: 80
