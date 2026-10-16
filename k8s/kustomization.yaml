@@ -19,4 +19,4 @@ images:
 - name: pirraste/movie-match-api
   newTag: v0.1.1
 - name: pirraste/movie-match-ui
-  newTag: v0.0.4
+  newTag: v0.0.5
