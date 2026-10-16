@@ -17,6 +17,6 @@ resources:
 # I tag reali si scrivono qui a ogni rilascio (vedi README).
 images:
 - name: pirraste/movie-match-api
-  newTag: v0.1.1
+  newTag: v0.1.2
 - name: pirraste/movie-match-ui
   newTag: v0.0.5
